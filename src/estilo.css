@@ -89,6 +89,21 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
 .campo input:focus, .campo select:focus { outline: 2px solid var(--destaque); outline-offset: -1px; border-color: transparent; }
 .campo small { color: var(--texto-suave); font-size: 12px; }
 .campos-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 0 12px; }
+.campos-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(130px, 100%), 1fr)); gap: 0 12px; }
+.campo textarea {
+  font: 14px/1.45 ui-monospace, Consolas, monospace; color: var(--texto); background: var(--campo);
+  border: 1px solid var(--borda); border-radius: 8px; padding: 8px 10px; width: 100%; resize: vertical; min-height: 110px;
+}
+.campo textarea:focus { outline: 2px solid var(--destaque); outline-offset: -1px; border-color: transparent; }
+.campo-copias { max-width: 160px; margin-top: 4px; }
+
+.tipos { display: flex; gap: 0; margin-bottom: 14px; border: 1px solid var(--borda); border-radius: 10px; padding: 3px; background: var(--campo); }
+.tipo { flex: 1 1 0; position: relative; cursor: pointer; }
+.tipo input { position: absolute; opacity: 0; pointer-events: none; }
+.tipo span { display: block; text-align: center; padding: 7px 10px; border-radius: 7px; font-weight: 600; font-size: 14px; color: var(--texto-suave); }
+.tipo input:checked + span { background: var(--destaque); color: var(--destaque-texto); }
+.tipo input:focus-visible + span { outline: 2px solid var(--destaque); outline-offset: 2px; }
+
 .campos-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); gap: 0 12px; }
 
 .marcar { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 8px; cursor: pointer; }

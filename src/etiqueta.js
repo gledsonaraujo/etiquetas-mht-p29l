@@ -264,6 +264,135 @@
   }
 
   // -------------------------------------------------------------------------------------
+  // Etiqueta personalizada — texto livre dentro da área imprimível
+  // -------------------------------------------------------------------------------------
+
+  /** Tamanhos do texto livre: o multiplicador da fonte interna (TEXT ...,x,y,...). */
+  const TAMANHO_MIN = 1;
+  const TAMANHO_MAX = 4;
+  const ALINHAMENTOS = ['esquerda', 'centro', 'direita'];
+
+  /**
+   * Quebra em palavras SEM PERDER caractere: a palavra maior que a linha é partida em
+   * pedaços, nunca cortada. No texto livre cada caractere foi digitado de propósito — o
+   * `quebrarTexto` da etiqueta de produto descarta a sobra de uma palavra longa, e aqui
+   * isso apagaria parte de um número de série ou de um código.
+   */
+  function quebrarSemPerda(texto, largura, continuacoes) {
+    const linhas = [];
+    const marcas = [];
+    let atual = '';
+    let continua = false;
+    const empurrar = (p, meioDaPalavra) => {
+      if (atual.length + p.length + (atual ? 1 : 0) <= largura) {
+        atual += (atual ? ' ' : '') + p;
+      } else {
+        if (atual) { linhas.push(atual); marcas.push(continua); }
+        atual = p;
+        continua = meioDaPalavra;
+      }
+    };
+    for (const palavra of String(texto || '').split(/\s+/).filter(Boolean)) {
+      if (palavra.length <= largura) { empurrar(palavra, false); continue; }
+      for (let i = 0; i < palavra.length; i += largura) empurrar(palavra.slice(i, i + largura), i > 0);
+    }
+    if (atual) { linhas.push(atual); marcas.push(continua); }
+    // `continuacoes` (opcional) recebe, por linha, se ela começa no MEIO de uma palavra —
+    // é o que permite remontar o texto sem inventar um espaço onde a palavra foi partida.
+    if (Array.isArray(continuacoes)) continuacoes.push(...marcas);
+    return linhas;
+  }
+
+  /** Quantos caracteres de um tamanho cabem numa linha da área útil. */
+  function caracteresNoTamanho(cfg, tamanho) {
+    return Math.max(1, Math.floor(caracteresPorLinha(cfg) / tamanho));
+  }
+
+  /**
+   * Etiqueta de texto livre: o que o usuário digitou, linha a linha, dentro da área útil
+   * (etiqueta menos a margem).
+   *
+   * - Cada linha digitada (Enter) é um parágrafo; o parágrafo maior que a largura quebra
+   *   em palavras. Linha em branco vira espaço vertical — é como se separa um bloco do outro.
+   * - `tamanho` multiplica a fonte (1 a 4); `destacarPrimeira` imprime a 1ª linha um
+   *   tamanho acima — o título da etiqueta.
+   * - `alinhamento` (esquerda, centro, direita) usa a largura MEDIDA da fonte, que é
+   *   pessimista: o centro na impressora pode sair alguns dots para a esquerda.
+   * - `vertical`: 'topo' ou 'centro' (o bloco inteiro centralizado na altura útil).
+   *
+   * O que não couber na altura NÃO some em silêncio: vira aviso com o texto que ficou de fora.
+   *
+   * @param {{texto:string}} dados
+   * @param {object} cfg saída de `lerConfig`
+   * @param {{copias:number, tamanho?:number, alinhamento?:string, vertical?:string, destacarPrimeira?:boolean}} opcoes
+   */
+  function montarEtiquetaTexto(dados, cfg, opcoes) {
+    const cmds = cabecalhoTspl(cfg);
+    const avisos = [];
+    const elementos = [];
+    const linhas = [];
+
+    const tamanho = prende(Math.trunc(Number(opcoes.tamanho) || 1), TAMANHO_MIN, TAMANHO_MAX);
+    const alinhamento = ALINHAMENTOS.includes(opcoes.alinhamento) ? opcoes.alinhamento : 'esquerda';
+    const vertical = opcoes.vertical === 'centro' ? 'centro' : 'topo';
+    const margem = mmParaDots(cfg.margem_mm);
+    const larguraUtil = mmParaDots(cfg.largura_mm - 2 * cfg.margem_mm);
+    const teto = mmParaDots(cfg.altura_mm - cfg.margem_mm);
+
+    // 1. Parágrafos → linhas, cada uma com o seu tamanho. Linhas em branco no fim não
+    //    ocupam espaço (sobra de Enter); no meio, sim.
+    const paragrafos = asciiImpressao(dados.texto || '').split('\n').map((p) => p.trim());
+    while (paragrafos.length && !paragrafos[paragrafos.length - 1]) paragrafos.pop();
+    while (paragrafos.length && !paragrafos[0]) paragrafos.shift();
+    const planejadas = [];
+    paragrafos.forEach((p, i) => {
+      const t = i === 0 && opcoes.destacarPrimeira ? Math.min(TAMANHO_MAX, tamanho + 1) : tamanho;
+      if (!p) { planejadas.push({ texto: '', tamanho: t }); return; }
+      const continuacoes = [];
+      quebrarSemPerda(p, caracteresNoTamanho(cfg, t), continuacoes).forEach((l, j) => {
+        planejadas.push({ texto: l, tamanho: t, continua: continuacoes[j] });
+      });
+    });
+    if (!planejadas.length) {
+      avisos.push('Digite o texto da etiqueta.');
+      return { tspl: renderTspl(cmds, opcoes.copias), linhas, avisos, elementos };
+    }
+
+    // 2. Quantas cabem na altura útil (a entrelinha só entre linhas, nunca depois da última).
+    const altura = (l) => cfg.fonte_altura_dots * l.tamanho;
+    const cabem = [];
+    let usado = 0;
+    for (const l of planejadas) {
+      const extra = (cabem.length ? cfg.entrelinha_dots : 0) + altura(l);
+      if (margem + usado + extra > teto) break;
+      cabem.push(l);
+      usado += extra;
+    }
+    const fora = planejadas.slice(cabem.length).filter((l) => l.texto)
+      .reduce((s, l, i) => s + (i && !l.continua ? ' ' : '') + l.texto, '');
+    if (fora) avisos.push('O texto não coube na altura da etiqueta — ficou de fora: "' + fora + '". Diminua o tamanho ou o texto.');
+
+    // 3. Posições. O bloco inteiro desce para o centro quando pedido.
+    let cursor = margem + (vertical === 'centro' ? Math.max(0, Math.floor((teto - margem - usado) / 2)) : 0);
+    cabem.forEach((l, i) => {
+      if (i) cursor += cfg.entrelinha_dots;
+      if (l.texto) {
+        const largura = l.texto.length * cfg.fonte_largura_dots * l.tamanho;
+        const folga = Math.max(0, larguraUtil - largura);
+        const desloc = alinhamento === 'centro' ? Math.floor(folga / 2) : alinhamento === 'direita' ? folga : 0;
+        const xPrevia = margem + desloc;
+        const x = mmParaDots(cfg.offset_x_mm) + xPrevia;
+        cmds.push('TEXT ' + x + ',' + cursor + ',"' + cfg.fonte + '",0,' + l.tamanho + ',' + l.tamanho + ',"' + textoTspl(l.texto) + '"');
+        elementos.push({ tipo: 'texto', x: xPrevia, y: cursor, texto: textoTspl(l.texto), escala: l.tamanho });
+      }
+      linhas.push(l.texto);
+      cursor += altura(l);
+    });
+
+    return { tspl: renderTspl(cmds, opcoes.copias), linhas, avisos, elementos };
+  }
+
+  // -------------------------------------------------------------------------------------
   // Calibração — os utilitários que descobrem os números da configuração
   // -------------------------------------------------------------------------------------
 
@@ -457,6 +586,7 @@
     asciiImpressao, moedaImpressao, quebrarTexto, truncarPalavra, duasColunas,
     DOTS_POR_MM, CONFIG_PADRAO, lerConfig, mmParaDots, caracteresPorLinha, larguraCode128,
     cabecalhoTspl, renderTspl, montarEtiquetaProduto,
+    TAMANHO_MIN, TAMANHO_MAX, ALINHAMENTOS, quebrarSemPerda, caracteresNoTamanho, montarEtiquetaTexto,
     montarGapDetect, montarRegua, montarMoldura, montarAmostraFontes, montarEtiquetaTeste,
     PADROES_128, modulosCode128, numeroBR, lerCsv, itensDoCsv,
   };

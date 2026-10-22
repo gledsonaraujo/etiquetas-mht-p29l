@@ -201,6 +201,88 @@ test('calibração: régua, moldura, gap e fontes são TSPL completos', () => {
   assert.match(E.montarEtiquetaTeste(cfg), /BARCODE/);
 });
 
+const textoOp = { copias: 1, tamanho: 1, alinhamento: 'esquerda', vertical: 'topo', destacarPrimeira: false };
+
+test('texto livre: uma linha por Enter, dentro da área útil, PRINT no fim', () => {
+  const m = E.montarEtiquetaTexto({ texto: 'Revisão em\n12/2026' }, cfg, { ...textoOp, copias: 2 });
+  const textos = m.tspl.split('\r\n').filter((l) => l.startsWith('TEXT'));
+  // margem 2 mm = 16 dots; altura 40 + entrelinha 2 → 2ª linha em y = 58
+  assert.deepEqual(textos, ['TEXT 16,16,"2",0,1,1,"Revisao em"', 'TEXT 16,58,"2",0,1,1,"12/2026"']);
+  assert.ok(m.tspl.endsWith('PRINT 1,2\r\n'));
+  assert.deepEqual(m.avisos, []);
+  assert.ok(!m.tspl.includes('BARCODE'));
+});
+
+test('texto livre: capacidade da 50×30 no tamanho 1 é 5 linhas; o resto vira aviso', () => {
+  const m = E.montarEtiquetaTexto({ texto: 'L1\nL2\nL3\nL4\nL5\nL6 sobra' }, cfg, textoOp);
+  assert.deepEqual(m.linhas, ['L1', 'L2', 'L3', 'L4', 'L5']);
+  assert.equal(m.avisos.length, 1);
+  assert.match(m.avisos[0], /L6 sobra/);
+});
+
+test('texto livre: tamanho multiplica a fonte e reduz os caracteres por linha', () => {
+  assert.equal(E.caracteresNoTamanho(cfg, 1), 28);
+  assert.equal(E.caracteresNoTamanho(cfg, 2), 14);
+  const m = E.montarEtiquetaTexto({ texto: 'ABCDEFGHIJ KLMNOP' }, cfg, { ...textoOp, tamanho: 2 });
+  assert.deepEqual(m.linhas, ['ABCDEFGHIJ', 'KLMNOP']);
+  assert.match(m.tspl, /TEXT 16,16,"2",0,2,2,"ABCDEFGHIJ"/);
+  assert.match(m.tspl, /TEXT 16,98,"2",0,2,2,"KLMNOP"/, '16 + 80 + 2');
+  assert.equal(E.montarEtiquetaTexto({ texto: 'x' }, cfg, { ...textoOp, tamanho: 9 }).elementos[0].escala, 4);
+});
+
+test('texto livre: palavra longa é PARTIDA, nunca perde caractere', () => {
+  const serie = 'SN-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const m = E.montarEtiquetaTexto({ texto: serie }, cfg, textoOp);
+  assert.equal(m.linhas.join(''), serie);
+  assert.ok(m.linhas.every((l) => l.length <= 28));
+  const marcas = [];
+  assert.deepEqual(E.quebrarSemPerda('ab cdefgh', 4, marcas), ['ab', 'cdef', 'gh']);
+  assert.deepEqual(marcas, [false, false, true], 'só "gh" começa no meio de uma palavra');
+});
+
+test('texto livre: o aviso do que sobrou remonta a palavra partida sem espaço', () => {
+  // tamanho 3 → 9 caracteres; "preventiva" (10) é partida em "preventiv" + "a"
+  const m = E.montarEtiquetaTexto({ texto: 'GWORK\nRevisao preventiva' }, cfg, { ...textoOp, tamanho: 3 });
+  assert.deepEqual(m.linhas, ['GWORK']);
+  assert.match(m.avisos[0], /ficou de fora: "Revisao preventiva"/);
+});
+
+test('texto livre: alinhamento centro e direita pela largura medida', () => {
+  // largura útil 368; "ABCD" = 4×13 = 52 → folga 316
+  const c = E.montarEtiquetaTexto({ texto: 'ABCD' }, cfg, { ...textoOp, alinhamento: 'centro' });
+  assert.match(c.tspl, /TEXT 174,16,/);
+  const d = E.montarEtiquetaTexto({ texto: 'ABCD' }, cfg, { ...textoOp, alinhamento: 'direita' });
+  assert.match(d.tspl, /TEXT 332,16,/);
+  const comOffset = E.montarEtiquetaTexto({ texto: 'ABCD' }, E.lerConfig({ offset_x_mm: 3 }), textoOp);
+  assert.match(comOffset.tspl, /TEXT 40,16,/, 'o offset entra no comando, não na prévia');
+  assert.equal(comOffset.elementos[0].x, 16);
+});
+
+test('texto livre: centralizar na vertical desce o bloco', () => {
+  // altura útil 208 − 40 de uma linha = 168 → desce 84
+  const m = E.montarEtiquetaTexto({ texto: 'Meio' }, cfg, { ...textoOp, vertical: 'centro' });
+  assert.match(m.tspl, /TEXT 16,100,/);
+});
+
+test('texto livre: 1ª linha em destaque, linha em branco no meio vira espaço', () => {
+  const m = E.montarEtiquetaTexto({ texto: '\nTitulo\n\nCorpo\n\n' }, cfg, { ...textoOp, destacarPrimeira: true });
+  assert.deepEqual(m.linhas, ['Titulo', '', 'Corpo']);
+  const t = m.tspl.split('\r\n').filter((l) => l.startsWith('TEXT'));
+  // 16 + 80 (título 2×) + 2 + 40 (linha em branco) + 2 = 140
+  assert.deepEqual(t, ['TEXT 16,16,"2",0,2,2,"Titulo"', 'TEXT 16,140,"2",0,1,1,"Corpo"']);
+});
+
+test('texto livre vazio: aviso e nenhum TEXT', () => {
+  const m = E.montarEtiquetaTexto({ texto: '  \n ' }, cfg, textoOp);
+  assert.ok(!m.tspl.includes('TEXT'));
+  assert.deepEqual(m.avisos, ['Digite o texto da etiqueta.']);
+});
+
+test('texto livre: só ASCII e aspas trocadas', () => {
+  const m = E.montarEtiquetaTexto({ texto: 'Atenção: "frágil" ½' }, cfg, textoOp);
+  assert.ok(m.tspl.includes(`"Atencao: 'fragil' 1/2"`));
+});
+
 test('a página carrega os scripts por <script> clássico (funciona aberta do disco)', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.ok(!/type=["']module["']/.test(html), 'módulo ES não carrega por file://');

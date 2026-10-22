@@ -1,11 +1,13 @@
 # Etiquetas MHT-P29L
 
-Página web estática que imprime **etiquetas de produto** na impressora térmica
-**Milestone MHT-P29L** (modo etiqueta, TSPL) direto do navegador — sem servidor, sem
-instalar driver, sem dependência.
+Página web estática que imprime etiquetas na impressora térmica **Milestone MHT-P29L**
+(modo etiqueta, TSPL) direto do navegador — sem servidor, sem instalar driver, sem
+dependência. Dois tipos de etiqueta:
 
-A etiqueta é a mesma do GWise (Estoque → Etiqueta do produto), com a calibração medida
-na P29L real:
+- **Produto** — a mesma do GWise (Estoque → Etiqueta do produto);
+- **Personalizada** — texto livre digitado dentro da área imprimível.
+
+A etiqueta de produto usa a calibração medida na P29L real:
 
 ```
 ┌──────────────────────────────────────┐  50 × 30 mm
@@ -15,9 +17,36 @@ na P29L real:
 └──────────────────────────────────────┘
 ```
 
+## Etiqueta personalizada
+
+Escolha **✍️ Personalizada** no topo do formulário e digite qualquer texto. Ele é impresso
+dentro da área útil (a etiqueta menos a margem):
+
+```
+┌──────────────────────────────────────┐
+│               GWORK                  │  1ª linha em destaque (um tamanho acima)
+│                                      │  linha em branco = espaço
+│         Revisao preventiva           │
+│         Proxima: 12/2026             │
+└──────────────────────────────────────┘
+```
+
+- **Cada Enter começa uma linha**; linha maior que a largura quebra em palavras, e palavra
+  maior que a linha é partida — nenhum caractere se perde (importa num número de série).
+- **Tamanho** 1× a 4× (o multiplicador da fonte da impressora). Na 50×30 mm: 28 caracteres
+  e 5 linhas no 1×; 14 caracteres e 2 linhas no 2×.
+- **Alinhamento** esquerda, centro ou direita, e **na altura** no topo ou centralizado.
+- **Destacar a 1ª linha**: o título sai um tamanho acima.
+- O que não couber na altura **não some em silêncio**: aparece um aviso com o texto que
+  ficou de fora.
+- Como na etiqueta de produto, acentos saem sem acento (`ç` → `c`) e aspas duplas viram
+  simples — limitação do firmware da impressora.
+
+A etiqueta personalizada entra na mesma lista de impressão que a de produto.
+
 ## O que a página faz
 
-- **Etiqueta avulsa**: preencha nome, SKU, código de barras, preço e cópias e imprima.
+- **Etiqueta avulsa**: preencha a etiqueta (produto ou texto livre) e as cópias e imprima.
 - **Prévia fiel**: a prévia é desenhada a partir da MESMA montagem que vai à impressora,
   e os comandos TSPL ficam visíveis (e copiáveis) logo abaixo.
 - **Lista**: junte várias etiquetas e imprima tudo de uma vez, numa conexão só. A lista
@@ -85,7 +114,7 @@ npm test
 | Arquivo | Papel |
 |---|---|
 | `index.html` | A página |
-| `src/etiqueta.js` | Domínio puro: monta o TSPL e os elementos da prévia; calibração; CSV; Code128 da prévia |
+| `src/etiqueta.js` | Domínio puro: monta o TSPL (produto e texto livre) e os elementos da prévia; calibração; CSV; Code128 da prévia |
 | `src/impressora.js` | Envio pela Web Serial, em blocos de 512 bytes e com prazo em todo passo |
 | `src/app.js` | A tela: formulário, prévia, lista, configuração |
 | `src/estilo.css` | Estilo (claro e escuro) |

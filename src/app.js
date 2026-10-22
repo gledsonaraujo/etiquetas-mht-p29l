@@ -56,20 +56,57 @@
   // Formulário do produto
   // -----------------------------------------------------------------------------------
 
+  const tipoAtual = () => {
+    const r = document.querySelector('input[name="tipo"]:checked');
+    return r && r.value === 'texto' ? 'texto' : 'produto';
+  };
+
+  function mostrarTipo(tipo) {
+    document.querySelectorAll('input[name="tipo"]').forEach((r) => { r.checked = r.value === tipo; });
+    $('grupo-produto').hidden = tipo !== 'produto';
+    $('grupo-texto').hidden = tipo !== 'texto';
+  }
+
+  const ehTexto = (item) => item.tipo === 'texto';
+
   function itemDoFormulario() {
-    const copias = Math.trunc(Number($('f-copias').value) || 1);
+    const copias = Math.min(100, Math.max(1, Math.trunc(Number($('f-copias').value) || 1)));
+    if (tipoAtual() === 'texto') {
+      return {
+        tipo: 'texto',
+        texto: $('f-texto').value.replace(/\r\n?/g, '\n'),
+        tamanho: Number($('f-tamanho').value) || 1,
+        alinhamento: $('f-alinhamento').value,
+        vertical: $('f-vertical').value,
+        destacarPrimeira: $('f-destacar').checked,
+        copias: copias,
+      };
+    }
     return {
+      tipo: 'produto',
       nome: $('f-nome').value.trim(),
       sku: $('f-sku').value.trim(),
       codigo_barras: $('f-codigo').value.trim(),
       preco_venda: E.numeroBR($('f-preco').value),
-      copias: Math.min(100, Math.max(1, copias)),
+      copias: copias,
       incluirCodigo: $('f-incluir-codigo').checked,
       incluirPreco: $('f-incluir-preco').checked,
     };
   }
 
+  /** Item sem texto/nome não imprime nada — a validação dos dois botões. */
+  function motivoItemVazio(item) {
+    if (ehTexto(item)) return item.texto.trim() ? null : ['Digite o texto da etiqueta.', 'f-texto'];
+    return item.nome ? null : ['Preencha o nome do produto.', 'f-nome'];
+  }
+
   function preencherFormulario(item) {
+    mostrarTipo(ehTexto(item) ? 'texto' : 'produto');
+    $('f-texto').value = item.texto || '';
+    $('f-tamanho').value = String(item.tamanho || 1);
+    $('f-alinhamento').value = item.alinhamento || 'esquerda';
+    $('f-vertical').value = item.vertical || 'topo';
+    $('f-destacar').checked = !!item.destacarPrimeira;
     $('f-nome').value = item.nome || '';
     $('f-sku').value = item.sku || '';
     $('f-codigo').value = item.codigo_barras || '';
@@ -79,7 +116,15 @@
     $('f-incluir-preco').checked = item.incluirPreco !== false;
   }
 
-  const montar = (item) => E.montarEtiquetaProduto(item, cfg, {
+  const montar = (item) => ehTexto(item)
+    ? E.montarEtiquetaTexto({ texto: item.texto }, cfg, {
+      copias: item.copias || 1,
+      tamanho: item.tamanho,
+      alinhamento: item.alinhamento,
+      vertical: item.vertical,
+      destacarPrimeira: item.destacarPrimeira,
+    })
+    : E.montarEtiquetaProduto(item, cfg, {
     copias: item.copias || 1,
     incluirCodigo: item.incluirCodigo !== false,
     incluirPreco: item.incluirPreco !== false,
@@ -111,18 +156,19 @@
     ctx.setLineDash([]);
 
     ctx.fillStyle = '#111111';
-    // A fonte da tela é esticada para ter EXATAMENTE a largura medida da fonte da
-    // impressora — assim o texto que estoura a etiqueta também estoura aqui.
-    const tamanho = Math.round(cfg.fonte_altura_dots * 0.62);
-    ctx.font = '600 ' + tamanho + 'px ui-monospace, Consolas, "Courier New", monospace';
     ctx.textBaseline = 'top';
-    const larguraTela = ctx.measureText('0').width || 1;
-    const sx = cfg.fonte_largura_dots / larguraTela;
 
     for (const el of montada.elementos) {
       if (el.tipo === 'texto') {
+        // A fonte da tela é esticada para ter EXATAMENTE a largura medida da fonte da
+        // impressora (vezes o multiplicador) — o texto que estoura lá estoura aqui.
+        const esc = el.escala || 1;
+        const altura = cfg.fonte_altura_dots * esc;
+        const tamanho = Math.round(altura * 0.62);
+        ctx.font = '600 ' + tamanho + 'px ui-monospace, Consolas, "Courier New", monospace';
+        const sx = (cfg.fonte_largura_dots * esc) / (ctx.measureText('0').width || 1);
         ctx.save();
-        ctx.translate(el.x, el.y + Math.max(0, (cfg.fonte_altura_dots - tamanho) / 2));
+        ctx.translate(el.x, el.y + Math.max(0, (altura - tamanho) / 2));
         ctx.scale(sx, 1);
         ctx.fillText(el.texto, 0, 0);
         ctx.restore();
@@ -140,16 +186,22 @@
   function atualizarPrevia() {
     const item = itemDoFormulario();
     // Formulário vazio mostra um EXEMPLO, dito como exemplo — senão a prévia abriria em
-    // branco e com um aviso de "sem código" sobre um produto que ninguém digitou.
-    const vazio = !item.nome && !item.sku && !item.codigo_barras;
-    const montada = montar(vazio
-      ? Object.assign({}, item, { nome: 'Nome do produto', sku: 'GW-0001', preco_venda: 45.9 })
-      : item);
+    // branco e com um aviso sobre uma etiqueta que ninguém digitou.
+    const texto = ehTexto(item);
+    const vazio = texto ? !item.texto.trim() : !item.nome && !item.sku && !item.codigo_barras;
+    const exemplo = texto
+      ? { texto: 'Texto livre\nDigite o que quiser\nem cada linha' }
+      : { nome: 'Nome do produto', sku: 'GW-0001', preco_venda: 45.9 };
+    const montada = montar(vazio ? Object.assign({}, item, exemplo) : item);
     desenhar(montada);
     $('tspl').textContent = montada.tspl;
+
+    const chars = texto ? E.caracteresNoTamanho(cfg, Number(item.tamanho) || 1) : E.caracteresPorLinha(cfg);
     $('previa-info').textContent = (vazio ? 'Exemplo · ' : '') + cfg.largura_mm + ' × ' + cfg.altura_mm + ' mm · '
-      + E.caracteresPorLinha(cfg) + ' caracteres por linha'
+      + chars + ' caracteres por linha' + (texto ? ' no tamanho ' + (item.tamanho || 1) + '×' : '')
       + (montada.codigo ? ' · código "' + montada.codigo + '" (as barras na tela são aproximadas; quem as gera é a impressora)' : '');
+    $('f-texto-dica').textContent = 'Até ' + chars + ' caracteres por linha neste tamanho — linha maior quebra em palavras, e o que '
+      + 'não couber na altura vira aviso. Acentos saem sem acento e aspas duplas viram simples (limitação da impressora).';
     avisos('previa-avisos', montada.avisos);
     return montada;
   }
@@ -176,7 +228,7 @@
     corpo.replaceChildren();
     const total = lista.reduce((s, it) => s + (it.copias || 1), 0);
     $('lista-contador').textContent = lista.length
-      ? '— ' + lista.length + (lista.length === 1 ? ' produto, ' : ' produtos, ') + total + (total === 1 ? ' etiqueta' : ' etiquetas')
+      ? '— ' + lista.length + (lista.length === 1 ? ' item, ' : ' itens, ') + total + (total === 1 ? ' etiqueta' : ' etiquetas')
       : '';
     $('lista-vazia').hidden = lista.length > 0;
     $('btn-imprimir-lista').disabled = !lista.length || imprimindo || !I.disponivel();
@@ -191,16 +243,22 @@
         td.textContent = texto;
         tr.appendChild(td);
       };
-      celula(it.nome);
-      celula(it.sku || '—');
-      celula(it.codigo_barras || (it.sku ? '(SKU)' : '—'));
-      celula(it.preco_venda != null && it.preco_venda > 0 ? E.moedaImpressao(it.preco_venda) : '—', 'num');
+      const rotulo = rotuloDoItem(it);
+      if (ehTexto(it)) {
+        celula('✍️ ' + rotulo);
+        celula('—'); celula('—'); celula('—', 'num');
+      } else {
+        celula(rotulo);
+        celula(it.sku || '—');
+        celula(it.codigo_barras || (it.sku ? '(SKU)' : '—'));
+        celula(it.preco_venda != null && it.preco_venda > 0 ? E.moedaImpressao(it.preco_venda) : '—', 'num');
+      }
 
       const tdCopias = document.createElement('td');
       tdCopias.className = 'num';
       const inp = document.createElement('input');
       inp.type = 'number'; inp.min = '1'; inp.max = '100'; inp.value = it.copias || 1;
-      inp.setAttribute('aria-label', 'Cópias de ' + it.nome);
+      inp.setAttribute('aria-label', 'Cópias de ' + rotulo);
       inp.addEventListener('change', () => {
         it.copias = Math.min(100, Math.max(1, Math.trunc(Number(inp.value) || 1)));
         inp.value = it.copias;
@@ -212,15 +270,15 @@
       const tdAcoes = document.createElement('td');
       tdAcoes.className = 'acoes-col';
       tdAcoes.append(
-        botao('✏️', 'Editar ' + it.nome, () => {
+        botao('✏️', 'Editar ' + rotulo, () => {
           editandoId = it.id;
           preencherFormulario(it);
           $('btn-adicionar').textContent = '💾 Salvar na lista';
           atualizarPrevia(); desenharLista();
-          $('f-nome').focus();
+          $(ehTexto(it) ? 'f-texto' : 'f-nome').focus();
         }),
-        botao('🖨️', 'Imprimir só ' + it.nome, () => imprimir([it])),
-        botao('🗑️', 'Remover ' + it.nome, () => {
+        botao('🖨️', 'Imprimir só ' + rotulo, () => imprimir([it])),
+        botao('🗑️', 'Remover ' + rotulo, () => {
           lista = lista.filter((x) => x.id !== it.id);
           if (editandoId === it.id) sairDaEdicao();
           salvarLista(); desenharLista();
@@ -236,16 +294,32 @@
     $('btn-adicionar').textContent = '➕ Adicionar à lista';
   }
 
+  /** O nome que a lista mostra: o do produto, ou a 1ª linha do texto livre. */
+  function rotuloDoItem(item) {
+    if (!ehTexto(item)) return item.nome || '(sem nome)';
+    const primeira = (item.texto || '').split('\n').map((l) => l.trim()).find(Boolean) || '(vazia)';
+    return primeira.length > 40 ? primeira.slice(0, 40) + '…' : primeira;
+  }
+
+  /** Recusa a etiqueta vazia com a frase e o foco no campo que falta. */
+  function recusarSeVazio(item) {
+    const motivo = motivoItemVazio(item);
+    if (!motivo) return false;
+    mensagem(motivo[0], 'erro');
+    $(motivo[1]).focus();
+    return true;
+  }
+
   function adicionarOuSalvar() {
     const item = itemDoFormulario();
-    if (!item.nome) { mensagem('Preencha o nome do produto.', 'erro'); $('f-nome').focus(); return; }
+    if (recusarSeVazio(item)) return;
     if (editandoId) {
       lista = lista.map((x) => (x.id === editandoId ? Object.assign({ id: x.id }, item) : x));
       mensagem('Etiqueta atualizada na lista.', 'ok');
       sairDaEdicao();
     } else {
       lista.push(Object.assign({ id: novoId() }, item));
-      mensagem('"' + item.nome + '" entrou na lista.', 'ok');
+      mensagem('"' + rotuloDoItem(item) + '" entrou na lista.', 'ok');
     }
     salvarLista(); desenharLista();
   }
@@ -405,18 +479,23 @@
     $('btn-trocar').disabled = !ok;
     $('ajuda-porta').textContent = I.MSG_ESCOLHA_DA_PORTA;
 
-    ['f-nome', 'f-sku', 'f-codigo', 'f-preco', 'f-copias', 'f-incluir-codigo', 'f-incluir-preco']
+    ['f-nome', 'f-sku', 'f-codigo', 'f-preco', 'f-copias', 'f-incluir-codigo', 'f-incluir-preco',
+      'f-texto', 'f-tamanho', 'f-alinhamento', 'f-vertical', 'f-destacar']
       .forEach((id) => $(id).addEventListener('input', atualizarPrevia));
+    document.querySelectorAll('input[name="tipo"]').forEach((r) => r.addEventListener('change', () => {
+      mostrarTipo(tipoAtual());
+      atualizarPrevia();
+    }));
 
     $('form-produto').addEventListener('submit', (ev) => {
       ev.preventDefault();
       const item = itemDoFormulario();
-      if (!item.nome) { mensagem('Preencha o nome do produto.', 'erro'); $('f-nome').focus(); return; }
+      if (recusarSeVazio(item)) return;
       imprimir([item]);
     });
     $('btn-adicionar').addEventListener('click', adicionarOuSalvar);
     $('btn-limpar-form').addEventListener('click', () => {
-      preencherFormulario({ copias: 1 });
+      preencherFormulario({ tipo: tipoAtual(), copias: 1 });
       sairDaEdicao();
       atualizarPrevia(); desenharLista();
     });

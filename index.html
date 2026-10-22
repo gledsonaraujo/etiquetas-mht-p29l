@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Etiquetas MHT-P29L</title>
-  <meta name="description" content="Imprime etiquetas de produto (nome, SKU, preço e código de barras) na impressora térmica Milestone MHT-P29L, direto do navegador.">
+  <meta name="description" content="Imprime etiquetas de produto (nome, SKU, preço e código de barras) e etiquetas de texto livre na impressora térmica Milestone MHT-P29L, direto do navegador.">
   <link rel="stylesheet" href="src/estilo.css">
 </head>
 <body>
@@ -13,7 +13,7 @@
       <span class="marca" aria-hidden="true">🏷️</span>
       <div>
         <h1>Etiquetas MHT-P29L</h1>
-        <p class="sub">Etiqueta de produto em TSPL, direto do navegador para a impressora térmica.</p>
+        <p class="sub">Etiquetas de produto e personalizadas em TSPL, direto do navegador para a impressora térmica.</p>
       </div>
     </div>
     <div class="topo-acoes">
@@ -28,8 +28,53 @@
 
     <div class="grade">
       <section class="cartao" aria-labelledby="t-produto">
-        <h2 id="t-produto">Produto</h2>
+        <h2 id="t-produto">Etiqueta</h2>
         <form id="form-produto" autocomplete="off">
+          <div class="tipos" role="radiogroup" aria-label="Tipo de etiqueta">
+            <label class="tipo"><input type="radio" name="tipo" value="produto" checked><span>🏷️ Produto</span></label>
+            <label class="tipo"><input type="radio" name="tipo" value="texto"><span>✍️ Personalizada</span></label>
+          </div>
+
+          <div id="grupo-texto" hidden>
+            <div class="campo">
+              <label for="f-texto">Texto da etiqueta</label>
+              <textarea id="f-texto" rows="5" maxlength="1000" spellcheck="true"
+                placeholder="Digite o que quiser. Cada Enter começa uma linha nova; linha em branco separa blocos."></textarea>
+              <small id="f-texto-dica"></small>
+            </div>
+            <div class="campos-3">
+              <div class="campo">
+                <label for="f-tamanho">Tamanho</label>
+                <select id="f-tamanho">
+                  <option value="1">1× (normal)</option>
+                  <option value="2">2×</option>
+                  <option value="3">3×</option>
+                  <option value="4">4×</option>
+                </select>
+              </div>
+              <div class="campo">
+                <label for="f-alinhamento">Alinhamento</label>
+                <select id="f-alinhamento">
+                  <option value="esquerda">Esquerda</option>
+                  <option value="centro">Centro</option>
+                  <option value="direita">Direita</option>
+                </select>
+              </div>
+              <div class="campo">
+                <label for="f-vertical">Na altura</label>
+                <select id="f-vertical">
+                  <option value="topo">No topo</option>
+                  <option value="centro">Centralizado</option>
+                </select>
+              </div>
+            </div>
+            <label class="marcar">
+              <input id="f-destacar" type="checkbox">
+              <span>Destacar a 1ª linha <small>— um tamanho acima, como título</small></span>
+            </label>
+          </div>
+
+          <div id="grupo-produto">
           <div class="campo campo-cheio">
             <label for="f-nome">Nome</label>
             <input id="f-nome" name="nome" type="text" maxlength="200" placeholder="Ex.: Filtro de óleo">
@@ -44,15 +89,9 @@
               <input id="f-preco" name="preco_venda" type="text" inputmode="decimal" placeholder="Ex.: 45,90">
             </div>
           </div>
-          <div class="campos-2">
-            <div class="campo">
-              <label for="f-codigo">Código de barras</label>
-              <input id="f-codigo" name="codigo_barras" type="text" maxlength="60" placeholder="Vazio = usa o SKU">
-            </div>
-            <div class="campo">
-              <label for="f-copias">Cópias</label>
-              <input id="f-copias" name="copias" type="number" min="1" max="100" value="1">
-            </div>
+          <div class="campo">
+            <label for="f-codigo">Código de barras</label>
+            <input id="f-codigo" name="codigo_barras" type="text" maxlength="60" placeholder="Vazio = usa o SKU">
           </div>
           <label class="marcar">
             <input id="f-incluir-codigo" type="checkbox" checked>
@@ -62,6 +101,12 @@
             <input id="f-incluir-preco" type="checkbox" checked>
             <span>Preço de venda</span>
           </label>
+          </div>
+
+          <div class="campo campo-copias">
+            <label for="f-copias">Cópias</label>
+            <input id="f-copias" name="copias" type="number" min="1" max="100" value="1">
+          </div>
           <div class="acoes">
             <button type="button" class="btn btn-sec" id="btn-limpar-form">Limpar</button>
             <button type="button" class="btn btn-sec" id="btn-adicionar">➕ Adicionar à lista</button>
@@ -103,12 +148,12 @@
       <div class="tabela-rolagem">
         <table class="tabela">
           <thead>
-            <tr><th>Nome</th><th>SKU</th><th>Código</th><th class="num">Preço</th><th class="num">Cópias</th><th class="acoes-col">Ações</th></tr>
+            <tr><th>Etiqueta</th><th>SKU</th><th>Código</th><th class="num">Preço</th><th class="num">Cópias</th><th class="acoes-col">Ações</th></tr>
           </thead>
           <tbody id="lista-corpo"></tbody>
         </table>
       </div>
-      <p class="vazio" id="lista-vazia">Nenhuma etiqueta na lista. Preencha o produto acima e use “Adicionar à lista”, ou importe uma planilha.</p>
+      <p class="vazio" id="lista-vazia">Nenhuma etiqueta na lista. Preencha a etiqueta acima e use “Adicionar à lista”, ou importe uma planilha de produtos.</p>
     </section>
 
     <section class="cartao">
