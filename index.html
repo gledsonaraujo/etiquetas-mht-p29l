@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Etiquetas MHT-P29L</title>
+  <meta name="description" content="Imprime etiquetas de produto (nome, SKU, preço e código de barras) na impressora térmica Milestone MHT-P29L, direto do navegador.">
+  <link rel="stylesheet" href="src/estilo.css">
+</head>
+<body>
+  <header class="topo">
+    <div class="topo-titulo">
+      <span class="marca" aria-hidden="true">🏷️</span>
+      <div>
+        <h1>Etiquetas MHT-P29L</h1>
+        <p class="sub">Etiqueta de produto em TSPL, direto do navegador para a impressora térmica.</p>
+      </div>
+    </div>
+    <div class="topo-acoes">
+      <span id="estado-serial" class="selo"></span>
+      <button type="button" class="btn btn-sec" id="btn-trocar">Trocar impressora</button>
+    </div>
+  </header>
+
+  <main class="conteudo">
+    <div id="aviso-serial" class="alerta alerta-aviso" hidden></div>
+    <div id="mensagem" class="alerta" role="status" aria-live="polite" hidden></div>
+
+    <div class="grade">
+      <section class="cartao" aria-labelledby="t-produto">
+        <h2 id="t-produto">Produto</h2>
+        <form id="form-produto" autocomplete="off">
+          <div class="campo campo-cheio">
+            <label for="f-nome">Nome</label>
+            <input id="f-nome" name="nome" type="text" maxlength="200" placeholder="Ex.: Filtro de óleo">
+          </div>
+          <div class="campos-2">
+            <div class="campo">
+              <label for="f-sku">SKU</label>
+              <input id="f-sku" name="sku" type="text" maxlength="60" placeholder="Ex.: GW-0001">
+            </div>
+            <div class="campo">
+              <label for="f-preco">Preço de venda</label>
+              <input id="f-preco" name="preco_venda" type="text" inputmode="decimal" placeholder="Ex.: 45,90">
+            </div>
+          </div>
+          <div class="campos-2">
+            <div class="campo">
+              <label for="f-codigo">Código de barras</label>
+              <input id="f-codigo" name="codigo_barras" type="text" maxlength="60" placeholder="Vazio = usa o SKU">
+            </div>
+            <div class="campo">
+              <label for="f-copias">Cópias</label>
+              <input id="f-copias" name="copias" type="number" min="1" max="100" value="1">
+            </div>
+          </div>
+          <label class="marcar">
+            <input id="f-incluir-codigo" type="checkbox" checked>
+            <span>Código de barras (Code128) <small>— codifica o código de barras ou, sem ele, o SKU</small></span>
+          </label>
+          <label class="marcar">
+            <input id="f-incluir-preco" type="checkbox" checked>
+            <span>Preço de venda</span>
+          </label>
+          <div class="acoes">
+            <button type="button" class="btn btn-sec" id="btn-limpar-form">Limpar</button>
+            <button type="button" class="btn btn-sec" id="btn-adicionar">➕ Adicionar à lista</button>
+            <button type="submit" class="btn btn-pri" id="btn-imprimir">🖨️ Imprimir</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="cartao" aria-labelledby="t-previa">
+        <h2 id="t-previa">Prévia</h2>
+        <div class="previa-papel">
+          <canvas id="previa" aria-label="Prévia da etiqueta"></canvas>
+        </div>
+        <p class="nota" id="previa-info"></p>
+        <div id="previa-avisos"></div>
+        <details class="tspl">
+          <summary>Comandos TSPL enviados</summary>
+          <pre id="tspl"></pre>
+          <button type="button" class="btn btn-sec btn-peq" id="btn-copiar-tspl">Copiar</button>
+        </details>
+      </section>
+    </div>
+
+    <section class="cartao" aria-labelledby="t-lista">
+      <div class="cartao-topo">
+        <h2 id="t-lista">Lista para imprimir <span class="contador" id="lista-contador"></span></h2>
+        <div class="acoes acoes-topo">
+          <label class="btn btn-sec" for="arquivo-csv">📄 Importar planilha (CSV)</label>
+          <input id="arquivo-csv" type="file" accept=".csv,text/csv" class="oculto">
+          <button type="button" class="btn btn-sec" id="btn-modelo">Baixar modelo</button>
+          <button type="button" class="btn btn-sec" id="btn-limpar-lista">Esvaziar</button>
+          <button type="button" class="btn btn-pri" id="btn-imprimir-lista">🖨️ Imprimir lista</button>
+        </div>
+      </div>
+      <p class="nota">A planilha precisa de uma coluna <strong>Nome</strong>; as demais são opcionais:
+        <strong>SKU</strong>, <strong>Código de barras</strong>, <strong>Preço de venda</strong> e <strong>Cópias</strong>.
+        Separador <code>;</code> ou <code>,</code>. A planilha de produtos exportada pelo GWise é aceita como está.</p>
+      <div id="lista-avisos"></div>
+      <div class="tabela-rolagem">
+        <table class="tabela">
+          <thead>
+            <tr><th>Nome</th><th>SKU</th><th>Código</th><th class="num">Preço</th><th class="num">Cópias</th><th class="acoes-col">Ações</th></tr>
+          </thead>
+          <tbody id="lista-corpo"></tbody>
+        </table>
+      </div>
+      <p class="vazio" id="lista-vazia">Nenhuma etiqueta na lista. Preencha o produto acima e use “Adicionar à lista”, ou importe uma planilha.</p>
+    </section>
+
+    <section class="cartao">
+      <details id="config-detalhes">
+        <summary><h2>Configuração e calibração</h2></summary>
+        <p class="nota">Os valores padrão são os da calibração da MHT-P29L usada no GWise (etiqueta 50×30 mm).
+          Mudou o rolo ou a impressora? Calibre com os botões abaixo. A configuração fica salva neste navegador.</p>
+        <div class="alerta alerta-info">A impressora precisa estar no modo <strong>etiqueta (CMD=TSPL)</strong>, escolhido no menu do
+          próprio aparelho. No modo cupom (CMD=ESC) os comandos saem impressos como texto, ou não saem.</div>
+
+        <h3>Etiqueta</h3>
+        <div class="campos-4" id="cfg-geometria"></div>
+        <h3>Impressão</h3>
+        <div class="campos-4" id="cfg-impressao"></div>
+        <h3>Fonte (métricas medidas)</h3>
+        <div class="campos-4" id="cfg-fonte"></div>
+
+        <div class="acoes acoes-esq">
+          <button type="button" class="btn btn-sec" id="btn-cfg-padrao">Restaurar padrão</button>
+          <button type="button" class="btn btn-sec" id="btn-cfg-exportar">Exportar configuração</button>
+          <label class="btn btn-sec" for="arquivo-cfg">Importar configuração</label>
+          <input id="arquivo-cfg" type="file" accept=".json,application/json" class="oculto">
+        </div>
+
+        <h3>Calibração na impressora</h3>
+        <ol class="passos">
+          <li><button type="button" class="btn btn-sec btn-peq" data-calibrar="gap">Detectar gap</button>
+            A impressora mede o espaço entre etiquetas e avança algumas — uma vez por rolo novo.</li>
+          <li><button type="button" class="btn btn-sec btn-peq" data-calibrar="regua">Imprimir régua</button>
+            O MENOR número visível na etiqueta é o deslocamento horizontal (offset X).</li>
+          <li><button type="button" class="btn btn-sec btn-peq" data-calibrar="moldura">Imprimir moldura</button>
+            Com o offset certo a moldura sai inteira e com folga igual dos dois lados — é o ajuste mais preciso.</li>
+          <li><button type="button" class="btn btn-sec btn-peq" data-calibrar="fontes">Amostra de fontes</button>
+            Meça a altura e conte os caracteres para preencher as métricas da fonte.</li>
+          <li><button type="button" class="btn btn-sec btn-peq" data-calibrar="teste">Etiqueta de teste</button>
+            O teste de ponta a ponta com a configuração atual.</li>
+        </ol>
+      </details>
+    </section>
+
+    <section class="cartao ajuda">
+      <h2>Como conectar</h2>
+      <ul>
+        <li>Use o <strong>Chrome</strong> ou o <strong>Edge</strong> num computador (a ponte com a porta serial só existe neles).</li>
+        <li id="ajuda-porta"></li>
+        <li>A impressora Bluetooth aceita <strong>um aparelho por vez</strong>: se o celular estiver conectado a ela, desligue o Bluetooth dele.</li>
+        <li>Código de barras que o leitor não lê pede <strong>densidade menor</strong>, não maior.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="rodape">Página estática, sem servidor: nada sai deste computador além dos bytes enviados à impressora.</footer>
+
+  <script src="src/etiqueta.js"></script>
+  <script src="src/impressora.js"></script>
+  <script src="src/app.js"></script>
+</body>
+</html>

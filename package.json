@@ -1,0 +1,13 @@
+{
+  "name": "etiquetas-mht-p29l",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Página estática que imprime etiquetas de produto (TSPL) na impressora térmica Milestone MHT-P29L pela Web Serial API.",
+  "scripts": {
+    "test": "node --test tests/etiqueta.test.js",
+    "start": "npx --yes http-server -p 8080 -c-1 ."
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
